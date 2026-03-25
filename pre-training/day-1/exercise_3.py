@@ -1,11 +1,33 @@
-user_input = int(input('Enter a number between 1-12: '))
+def print_multiplication_table(n: int, start: int = 1, end: int = 10) -> None:
+    for multiplier in range(start, end + 1):
+        result = n * multiplier
+        print(f"{n:>2} x {multiplier:>2} = {result:>4}")
 
-while user_input < 1 or user_input > 12:
-    user_input = int(input('Enter a number between 1-12: '))
 
-for i in range(1,11):
-    print(f'{user_input:>2} * {i:>2} = {user_input * i:>3}')
+def main() -> None:
+    while True:
+        raw = input("Enter a number (1-12) or 'all' for all tables: ").strip().lower()
 
-for x in range(1, 13):
-    for y in range(1, 11):
-        print(f'{x:>2} * {y:>2} = {x * y:>3}')
+        if raw == "all":
+            for n in range(1, 13):
+                print(f"\nMultiplication table for {n}")
+                print_multiplication_table(n)
+            return
+
+        try:
+            n = int(raw)
+        except ValueError:
+            print("Invalid input. Try again with a number between 1-12.")
+            continue
+
+        if 1 <= n <= 12:
+            break
+
+        print("Out of range. Please enter a number between 1-12.")
+
+    print(f"\nMultiplication table for {n}")
+    print_multiplication_table(n)
+
+
+if __name__ == "__main__":
+    main()

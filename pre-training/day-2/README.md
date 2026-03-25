@@ -1,3 +1,1 @@
-# Day 2
-
-List behaves just like a normal array and it is ordered. Whereas a Dictionary is a collection of key values pairs and is unordered. List retains the insertion order whereas a Dictionary does not retain the order.
+A `list` is an ordered sequence where you usually access items by position (index) and it’s great when you want ordering or you have duplicate entries. A `dict` maps unique keys to values, making it ideal when you need fast lookups or want to store structured records like `{name: ..., scores: ...}`.

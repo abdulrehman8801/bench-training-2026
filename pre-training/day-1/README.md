@@ -1,5 +1,1 @@
-# Day 1
-
-On day 1, I built three small Python programs to practice basic programming concepts.  
-The first program calculates personal and financial details including coffee expenses and years until retirement.  
-The second program classifies numeric grades, and the third program generates multiplication tables based on user input.
+On day 1, I built three Python scripts: one for variables/types + coffee budget math, one for grade classification using control flow, and one for generating multiplication tables with loops. What tripped me up most was making sure I used variables everywhere in the calculations and keeping the output formatting consistent. If I did it again, I would add small input validation helpers earlier and aim for clearer functions from the start.

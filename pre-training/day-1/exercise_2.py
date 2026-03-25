@@ -1,23 +1,24 @@
-def grade_classifier(marks):
-    if marks >= 90:
-        return 'Distinction'
-    elif marks >= 60:
-        return 'Pass'
-    else:
-        return 'Fail'
+def grade_classifier(score: float) -> str:
+    try:
+        score = float(score)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"score must be a number, got {score!r}") from exc
 
-print(grade_classifier(92))
-print(grade_classifier(89))
-print(grade_classifier(59))
-print(grade_classifier(60))
-print(grade_classifier(90))
+    if score < 0:
+        raise ValueError("score cannot be negative")
 
-scores = [45,72,91,60,38,85]
+    if score >= 90:
+        return "Distinction"
+    if score >= 60:
+        return "Pass"
+    return "Fail"
 
+
+test_scores = [92, 89, 59, 60, 90]
+for s in test_scores:
+    print(f"score = {s} -> {grade_classifier(s)}")
+
+
+scores = [45, 72, 91, 60, 38, 85]
 for score in scores:
-    print(grade_classifier(score))
-
-iterator = 0
-while iterator < len(scores):
-    print(grade_classifier(scores[iterator]))
-    iterator += 1
+    print(f"score = {score} -> {grade_classifier(score)}")

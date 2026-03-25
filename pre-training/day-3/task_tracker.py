@@ -1,102 +1,191 @@
-import json
 import argparse
-import datetime
-import uuid
+import json
+import os
+import sys
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-class Task_Tracker:
+@dataclass
+class Task:
+    id: int
+    title: str
+    status: str
+    created_at: datetime
 
-    def __init__(self, file_path):
+class TaskManager:
+    VALID_STATUSES = {"todo", "done"}
+
+    def __init__(self, file_path: str) -> None:
         self.file_path = file_path
 
-    def load_data(self):
+    def _load_tasks_raw(self) -> List[Dict[str, Any]]:
         try:
-            with open(self.file_path, 'r') as file:
-                return json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            print("No valid data found, starting fresh.")
-            return {"tasks": []}
+            with open(self.file_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+        except FileNotFoundError:
+            return []
+        except json.JSONDecodeError:
+            print(
+                f"Error: tasks.json is corrupt ({self.file_path}). Starting fresh.",
+                file=sys.stderr,
+            )
+            return []
 
-    def save_data(self, data):
-        with open(self.file_path, 'w') as file:
-            json.dump(data, file, indent=4)
+        tasks = payload.get("tasks")
+        if tasks is None:
+            return []
+        if not isinstance(tasks, list):
+            print(
+                f"Error: tasks.json has unexpected format. Starting fresh.",
+                file=sys.stderr,
+            )
+            return []
+        return tasks
 
-    def add_task(self, title):
-        data = self.load_data()
-        data["tasks"].append({"id": str(uuid.uuid4())[:8], "title": title, "status": "todo", "created_at": str(datetime.datetime.now())})
-        self.save_data(data)
+    def load_tasks(self) -> List[Task]:
+        tasks: List[Task] = []
+        for item in self._load_tasks_raw():
+            try:
+                task_id = int(item["id"])
+                title = str(item["title"])
+                status = str(item["status"]).lower()
+                if status not in self.VALID_STATUSES:
+                    status = "todo"
+                created_at_raw = item["created_at"]
+                created_at = (
+                    datetime.fromisoformat(created_at_raw)
+                    if isinstance(created_at_raw, str)
+                    else datetime.now()
+                )
+                tasks.append(
+                    Task(
+                        id=task_id,
+                        title=title,
+                        status=status,
+                        created_at=created_at,
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return tasks
 
-    def complete_task(self, id):
-        print("Completing task: ", id)
-        data = self.load_data()
-        updated = False
+    def save_tasks(self, tasks: List[Task]) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "id": task.id,
+                    "title": task.title,
+                    "status": task.status,
+                    "created_at": task.created_at.isoformat(),
+                }
+                for task in tasks
+            ]
+        }
+        with open(self.file_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=4)
 
-        for task in data["tasks"]:
-            if task["id"] == id:
-                task["status"] = "done"
-                updated = True
-                break
+    def _next_id(self, tasks: List[Task]) -> int:
+        return (max((t.id for t in tasks), default=0) + 1) if tasks else 1
 
-        if updated:
-            self.save_data(data)
-            print(f"Task '{id}' marked as done.")
-        else:
-            print(f"No task found with id={id}.")
+    def add_task(self, title: str) -> Task:
+        title = (title or "").strip()
+        if not title:
+            raise ValueError("title cannot be empty")
 
-    def delete_task(self, id):
-        data = self.load_data()
-        updated = False
-        for task in data["tasks"]:
-            if task["id"] == id:
-                data["tasks"].remove(task)
-                updated = True
-                break
+        tasks = self.load_tasks()
+        new_task = Task(
+            id=self._next_id(tasks),
+            title=title,
+            status="todo",
+            created_at=datetime.now(),
+        )
+        tasks.append(new_task)
+        self.save_tasks(tasks)
+        return new_task
 
-        if updated:
-            self.save_data(data)
-            print(f"Task '{id}' was removed.")
-        else:
-            print(f"No task found with id={id}.")
+    def _find_task_index(self, tasks: List[Task], task_id: int) -> int:
+        for i, task in enumerate(tasks):
+            if task.id == task_id:
+                return i
+        return -1
 
-    def list_tasks(self, filter=None):
-        data = self.load_data()
-        tasks = data["tasks"]
+    def complete_task(self, task_id: int) -> Task:
+        tasks = self.load_tasks()
+        idx = self._find_task_index(tasks, task_id)
+        if idx == -1:
+            raise KeyError(f"No task found with id={task_id}")
 
-        if filter:
-            filtered_tasks = [task for task in tasks if task["status"].lower() == filter.lower()]
-            return filtered_tasks
-        else:
+        tasks[idx].status = "done"
+        self.save_tasks(tasks)
+        return tasks[idx]
+
+    def delete_task(self, task_id: int) -> None:
+        tasks = self.load_tasks()
+        idx = self._find_task_index(tasks, task_id)
+        if idx == -1:
+            raise KeyError(f"No task found with id={task_id}")
+
+        tasks.pop(idx)
+        self.save_tasks(tasks)
+
+    def list_tasks(self, filter: Optional[str] = None) -> List[Task]:
+        tasks = self.load_tasks()
+        if filter is None:
             return tasks
 
+        normalized = str(filter).lower()
+        if normalized not in self.VALID_STATUSES:
+            raise ValueError("filter must be one of: todo, done")
+        return [t for t in tasks if t.status == normalized]
 
-def main():
-    parser = argparse.ArgumentParser(description="Task Tracker")
-    subparsers = parser.add_subparsers(dest="command")
+
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = argparse.ArgumentParser(description="Task Tracker CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     parser_add = subparsers.add_parser("add")
     parser_add.add_argument("title", type=str, help="title of the task")
 
     parser_done = subparsers.add_parser("done")
-    parser_done.add_argument("id", type=str, help="id of the task")
+    parser_done.add_argument("id", type=int, help="id of the task")
 
     parser_delete = subparsers.add_parser("delete")
-    parser_delete.add_argument("id", type=str, help="id of the task")
+    parser_delete.add_argument("id", type=int, help="id of the task")
 
     parser_list = subparsers.add_parser("list")
-    parser_list.add_argument("--filter", type=str, help="filter of the task")
+    parser_list.add_argument("--filter", type=str, default=None, help="todo or done")
 
-    args = parser.parse_args()
-    task = Task_Tracker("tasks.json")
+    args = parser.parse_args(argv)
 
-    if args.command == "add":
-        task.add_task(args.title)
-    elif args.command == "done":
-        task.complete_task(args.id[:8])
-    elif args.command == "delete":
-        task.delete_task(args.id[:8])
-    elif args.command == "list":
-        print(task.list_tasks(args.filter))
-    else:
-        parser.print_help()
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    tasks_file = os.path.join(script_dir, "tasks.json")
+    manager = TaskManager(tasks_file)
+
+    try:
+        if args.command == "add":
+            task = manager.add_task(args.title)
+            print(f"Added task: id={task.id} | {task.title}")
+        elif args.command == "done":
+            task = manager.complete_task(args.id)
+            print(f"Task completed: id={task.id} | {task.title}")
+        elif args.command == "delete":
+            manager.delete_task(args.id)
+            print(f"Task deleted: id={args.id}")
+        elif args.command == "list":
+            tasks = manager.list_tasks(args.filter)
+            if not tasks:
+                print("No tasks found.")
+            for t in tasks:
+                created_at = t.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                print(f"{t.id} | {t.title} | {t.status} | created_at={created_at}")
+        else:
+            parser.print_help()
+            return
+    except (ValueError, KeyError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
